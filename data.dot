@@ -1,0 +1,15 @@
+digraph prof {
+ a -> b;
+ c -> a;
+ b -> c;
+}
+
+
+
+//¤ emits Record.onLoad 
+
+//¤ listens Record.onLoad
+
+
+
+
