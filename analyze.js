@@ -4,18 +4,19 @@
 
 var fs = require('fs'),
     esprima = require('esprima'),
-    options = {},
+    options = {format:'graph'},
+    dependencies = [],
     fnames = [], count;
 
 function showUsage() {
     console.log('Usage:');
     console.log('   catgraph [options] file.js');
     console.log();
-    //console.log('Available options:');
-    //console.log();
-    //console.log('  --format=type  Set the report format, plain (default) or junit');
-    //console.log('  -v, --version  Print program version');
-    //console.log();
+    console.log('Available options:');
+    console.log();
+    console.log('  --format=type  Either deps or graph');
+    console.log('  -v, --version  Print program version');
+    console.log();
     process.exit(1);
 }
 
@@ -27,7 +28,7 @@ function repeat(s,n) {
     return r;
 }
 
-function findDependencies(fname,syntax, depth, parent) {
+function findDependencies(fname, syntax, depth, parent) {
     
     var rv, a, c, rest;
     var nextDepth = depth+1;
@@ -37,6 +38,9 @@ function findDependencies(fname,syntax, depth, parent) {
     var findNext = function (x) {
         return findDependencies (fname, x, nextDepth, syntax);
     };
+    function dependency (type,target) {
+        dependencies.push([fname,type,target]);
+    }
 
     if (!syntax) { return '<nothing>'; }
     rv = '<' + syntax.type + '>';
@@ -49,7 +53,6 @@ function findDependencies(fname,syntax, depth, parent) {
         syntax.body.forEach(findNext);
     } else if (syntax.type == 'MemberExpression') {
         rv = findNext(syntax.object) + '.' + findNext(syntax.property);
-        if (!rv) output(syntax.object,syntax.property);
     } else if (syntax.type == 'VariableDeclaration') {
         syntax.declarations.forEach(findNext);
     } else if (syntax.type == 'ArrayExpression') {
@@ -125,11 +128,11 @@ function findDependencies(fname,syntax, depth, parent) {
         c = findNext(syntax.callee).toLowerCase();
         if (c == 'define') {
             var arg = findNext(syntax.arguments[0])
-            for (a in arg) { output('require',arg[a]); }
+            for (a in arg) { dependency('require',arg[a]); }
             rest = syntax.arguments.slice(1);
         } else if (c == 'bus.on' || c == 'bus.emit' || c == 'require') {
             var arg = findNext(syntax.arguments[0])
-            output(c.toLowerCase(),arg);
+            dependency(c.toLowerCase(),arg);
             rest = syntax.arguments.slice(1);
         } else {
             rest = syntax.arguments;
@@ -170,8 +173,13 @@ if (process.argv.length <= 2) {
 
 process.argv.splice(2).forEach(function (entry) {
 
+    var fmt = '--format=';
     if (entry === '-h' || entry === '--help') {
         showUsage();
+    } else if (entry === '-v' || entry === '--version') {
+        console.log('Version 1');
+    } else if (entry.indexOf(fmt) == 0) {
+        options.format = entry.slice(fmt.length);
     } else if (entry.slice(0, 2) === '--') {
         console.log('Error: unknown option ' + entry + '.');
         process.exit(1);
@@ -180,6 +188,11 @@ process.argv.splice(2).forEach(function (entry) {
     }
 });
 
+if (options.format !== 'deps' && options.format !== 'graph') {
+    console.log('Error: format must be deps or graph, not ' +
+        options.format + '.');
+    process.exit(1);
+}
 if (fnames.length === 0) {
     console.log('Error: no input file.');
     process.exit(1);
@@ -187,3 +200,23 @@ if (fnames.length === 0) {
 
 fnames.forEach(handleFile);
 
+var graph = options.format === 'graph';
+
+if (graph) { console.log('digraph prof {'); }
+
+for (var i in dependencies) {
+    var dep = dependencies[i];
+    if (graph) {
+        if (dep[1] === 'require') {
+            console.log(' ' + dep[0], '->', dep[2], ';');
+        } else if (dep[1] === 'bus.emit') {
+        } else if (dep[1] === 'bus.on') {
+        } else {
+            throw new Error (dep);
+          
+        }
+    } else {
+        console.log(dep[0],dep[1],dep[2]);
+    }
+}
+if (graph) { console.log('}'); }
