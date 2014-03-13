@@ -4,20 +4,64 @@
 
 var fs = require('fs'),
     esprima = require('esprima'),
-    options = {format:'graph'},
-    dependencies = [],
-    fnames = [], count;
+    dependencies = [];
 
 function showUsage() {
     console.log('Usage:');
-    console.log('   catgraph [options] file.js');
+    console.log('   catgraph [options] file.js [...]');
     console.log();
     console.log('Available options:');
     console.log();
-    console.log('  --format=type  Either deps or graph');
+    console.log('  --format=text|deps|events');
     console.log('  -v, --version  Print program version');
     console.log();
     process.exit(1);
+}
+
+function handleArgs() {
+
+    var options = {
+        fnames:[],
+        format:'deps'
+    };
+    var fmt = '--format=';
+    
+    if (process.argv.length <= 2) {
+        showUsage();
+    }
+
+    process.argv.splice(2).forEach(function (entry) {
+
+        if (entry === '-h' || entry === '--help') {
+            showUsage();
+        } else if (entry === '-v' || entry === '--version') {
+            console.log('Version 1');
+        } else if (entry.indexOf(fmt) == 0) {
+            options.format = entry.slice(fmt.length);
+        } else if (entry.slice(0, 2) === '--') {
+            console.log('Error: unknown option ' + entry + '.');
+            process.exit(1);
+        } else {
+            options.fnames.push(entry);
+        }
+    });
+
+    if (options.format !== 'deps' &&
+        options.format !== 'events' &&
+        options.format !== 'text') {
+            
+        console.log('Error: format must be deps, events or text, not ' +
+            options.format + '.');
+        process.exit(1);
+    }
+
+    if (options.fnames.length === 0) {
+        console.log('Error: no input file.');
+        process.exit(1);
+    }
+    
+    return options;
+    
 }
 
 function repeat(s,n) {
@@ -166,62 +210,59 @@ function handleFile(fname) {
     }
 }
 
-if (process.argv.length <= 2) {
-    showUsage();
+function skipInGraph(id) {
+    return  (id.indexOf('text!') === 0) ||
+            (id.indexOf('json!') === 0) ||
+            (id === 'underscore') ||
+            (id === 'core/L');
 }
 
+function createOutput(options) {
 
-process.argv.splice(2).forEach(function (entry) {
+    var deps = options.format === 'deps';
+    var events = options.format === 'events';
+    var ev = {};
+    var myRe = /[.\-\/]/g;
 
-    var fmt = '--format=';
-    if (entry === '-h' || entry === '--help') {
-        showUsage();
-    } else if (entry === '-v' || entry === '--version') {
-        console.log('Version 1');
-    } else if (entry.indexOf(fmt) == 0) {
-        options.format = entry.slice(fmt.length);
-    } else if (entry.slice(0, 2) === '--') {
-        console.log('Error: unknown option ' + entry + '.');
-        process.exit(1);
-    } else {
-        fnames.push(entry);
-    }
-});
+    if (deps||events) { console.log('digraph prof {'); }
 
-if (options.format !== 'deps' && options.format !== 'graph') {
-    console.log('Error: format must be deps or graph, not ' +
-        options.format + '.');
-    process.exit(1);
-}
-if (fnames.length === 0) {
-    console.log('Error: no input file.');
-    process.exit(1);
-}
+    for (var i in dependencies) {
+        var dep = dependencies[i];
+        var subj = dep[0].replace(/\.js$/,'').replace(myRe,'_'),
+            pred = dep[1]
+            obj = dep[2].replace(myRe,'_');
 
-fnames.forEach(handleFile);
-
-var graph = options.format === 'graph';
-
-if (graph) { console.log('digraph prof {'); }
-
-var myRe = /[.\-\/]/g;
-for (var i in dependencies) {
-    var dep = dependencies[i];
-    if (graph) {
-        if (dep[1] === 'require') {
-            if (dep[2].indexOf('text!') === 0) { continue; }
-            if (dep[2].indexOf('json!') === 0) { continue; }
-            dep[0] = dep[0].replace(/\.js$/,'').replace(myRe,'_');
-            dep[2] = dep[2].replace(myRe,'_');
-            console.log(' ' + dep[0], '->', dep[2], ';');
-        } else if (dep[1] === 'bus.emit') {
-        } else if (dep[1] === 'bus.on') {
+        if (deps) {
+            if (pred === 'require' && !skipInGraph(obj)) {
+                console.log(' ' + subj, '->', obj, ';');
+            }
+        } else if (events) {
+            if (skipInGraph(obj)) { continue; }
+            if (pred === 'bus.on') {
+                console.log(' ' + obj, '->', subj, ';');
+                ev[obj] = true;
+            } else if (pred === 'bus.emit') {
+                console.log(' ' + subj, '->', obj, ';');
+                ev[obj] = true;
+            }
         } else {
-            throw new Error (dep);
-          
+            console.log(subj,obj,pred);
         }
-    } else {
-        console.log(dep[0],dep[1],dep[2]);
     }
+    for (var event in ev) {
+        console.log(event,'[shape=box];');
+    }
+
+    if (deps ||events) { console.log('}'); }
+
 }
-if (graph) { console.log('}'); }
+
+function main () {
+
+    var options = handleArgs();
+    options.fnames.forEach(handleFile);
+    createOutput(options);
+    
+}
+
+main();
