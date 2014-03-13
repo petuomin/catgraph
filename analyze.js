@@ -204,10 +204,15 @@ var graph = options.format === 'graph';
 
 if (graph) { console.log('digraph prof {'); }
 
+var myRe = /[.\-\/]/g;
 for (var i in dependencies) {
     var dep = dependencies[i];
     if (graph) {
         if (dep[1] === 'require') {
+            if (dep[2].indexOf('text!') === 0) { continue; }
+            if (dep[2].indexOf('json!') === 0) { continue; }
+            dep[0] = dep[0].replace(/\.js$/,'').replace(myRe,'_');
+            dep[2] = dep[2].replace(myRe,'_');
             console.log(' ' + dep[0], '->', dep[2], ';');
         } else if (dep[1] === 'bus.emit') {
         } else if (dep[1] === 'bus.on') {

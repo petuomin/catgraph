@@ -1,2 +1,2 @@
-node analyze.js core/*.js modules/*.js >dependencies.txt
-dot data.dot -Tpng -o kuva.png
+node analyze.js core/*.js modules/*.js >koe.dot
+dot koe.dot -Tpng -o kuva.png
