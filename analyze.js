@@ -31,7 +31,8 @@ function findDependencies(fname,syntax, depth, parent) {
     
     var rv, a, c, rest;
     var nextDepth = depth+1;
-    var prefix = fname; // repeat(' ',depth);
+    var prefix = fname;
+    //var prefix = repeat(' ',depth);
     var output = console.log.bind(console,prefix);
     var findNext = function (x) {
         return findDependencies (fname, x, nextDepth, syntax);
@@ -39,7 +40,10 @@ function findDependencies(fname,syntax, depth, parent) {
 
     if (!syntax) { return '<nothing>'; }
     rv = '<' + syntax.type + '>';
-    //output(syntax.type, Object.keys(syntax).join(' '));
+    var displayName = syntax.name ? syntax.name :
+                      typeof syntax.value !== 'object' ? syntax.value :
+                      '';
+    //output(syntax.type, displayName);//, Object.keys(syntax).join(' '));
     if (syntax.type == 'Program' ||
         syntax.type == 'BlockStatement') {
         syntax.body.forEach(findNext);
@@ -67,12 +71,13 @@ function findDependencies(fname,syntax, depth, parent) {
     } else if (syntax.type == 'ThisExpression') {
         rv = 'this';
     } else if (syntax.type == 'Property') {
+        findNext(syntax.key);
         findNext(syntax.value);
     } else if (syntax.type == 'IfStatement' ||
                syntax.type == 'ConditionalExpression') {
         findNext(syntax.test);
         findNext(syntax.consequent);
-        findNext(syntax.alternative);
+        findNext(syntax.alternate);
     } else if (syntax.type == 'WhileStatement') {
         findNext(syntax.test);
         findNext(syntax.body);
@@ -88,6 +93,7 @@ function findDependencies(fname,syntax, depth, parent) {
     } else if (syntax.type == 'VariableDeclarator') {
         findNext(syntax.init);
     } else if (syntax.type == 'AssignmentExpression') {
+        findNext(syntax.left);
         findNext(syntax.right);
     } else if (syntax.type == 'ExpressionStatement') {
         findNext(syntax.expression);
