@@ -27,49 +27,29 @@ function repeat(s,n) {
     return r;
 }
 
-function findDependencies(syntax, depth, parent) {
+function findDependencies(fname,syntax, depth, parent) {
     
-    var rv, c, rest;
+    var rv, a, c, rest;
     var nextDepth = depth+1;
+    var prefix = fname; // repeat(' ',depth);
+    var output = console.log.bind(console,prefix);
     var findNext = function (x) {
-        return findDependencies (x, nextDepth, syntax);
+        return findDependencies (fname, x, nextDepth, syntax);
     };
-    var indent = repeat(' ',depth);
-    var output = console.log.bind(console,indent);
-    if (!syntax) {
-        return '<nothing>';
-    }
+
+    if (!syntax) { return '<nothing>'; }
     rv = '<' + syntax.type + '>';
     //output(syntax.type, Object.keys(syntax).join(' '));
     if (syntax.type == 'Program' ||
         syntax.type == 'BlockStatement') {
         syntax.body.forEach(findNext);
-    } else if (syntax.type == 'CallExpression' ||
-               syntax.type == 'NewExpression') {
-        c = findNext(syntax.callee);
-        if (c == 'define') {
-            var arg = findNext(syntax.arguments[0])
-            console.log(c,arg);
-            rest = syntax.arguments.slice(1);
-        } else if (c == 'require') {
-            var arg = findNext(syntax.arguments[0])
-            console.log(c,arg);
-            rest = syntax.arguments.slice(1);
-        } else if (c == 'bus.on' || c == 'Bus.on') {
-            var arg = findNext(syntax.arguments[0])
-            console.log(c,arg);
-            rest = syntax.arguments.slice(1);
-        } else {
-            rest = syntax.arguments;
-        }
-        rest.forEach(findNext);
     } else if (syntax.type == 'MemberExpression') {
         rv = findNext(syntax.object) + '.' + findNext(syntax.property);
-        if (!rv) console.log(syntax.object,syntax.property);
+        if (!rv) output(syntax.object,syntax.property);
     } else if (syntax.type == 'VariableDeclaration') {
         syntax.declarations.forEach(findNext);
     } else if (syntax.type == 'ArrayExpression') {
-        rv = '[' + (syntax.elements.map(findNext).join(' ')) + ']';
+        rv = syntax.elements.map(findNext);
     } else if (syntax.type == 'FunctionDeclaration') {
         findNext(syntax.body);
     } else if (syntax.type == 'FunctionExpression') {
@@ -111,15 +91,46 @@ function findDependencies(syntax, depth, parent) {
         findNext(syntax.right);
     } else if (syntax.type == 'ExpressionStatement') {
         findNext(syntax.expression);
+    } else if (syntax.type == 'SwitchStatement') {
+        findNext(syntax.discriminant);
+        syntax.cases.forEach(findNext);
+    } else if (syntax.type == 'SwitchCase') {
+        findNext(syntax.test);
+        syntax.consequent.forEach(findNext);
+    } else if (syntax.type == 'TryStatement') {
+        findNext(syntax.block);
+        findNext(syntax.finalizer);
+        syntax.handlers.forEach(findNext);
+        syntax.guardedHandlers.forEach(findNext);
+    } else if (syntax.type == 'CatchClause') {
+        findNext(syntax.param);
+        findNext(syntax.body);
     } else if (syntax.type == 'LogicalExpression' ||
                syntax.type == 'BinaryExpression') {
         findNext(syntax.left);
         findNext(syntax.right);
     } else if (syntax.type == 'Literal') {
         rv = syntax.value;
-    } else if (syntax.type == 'ContinueStatement') {
+    } else if (syntax.type == 'ContinueStatement' ||
+               syntax.type == 'BreakStatement' ||
+               syntax.type == 'EmptyStatement') {
+    } else if (syntax.type == 'CallExpression' ||
+               syntax.type == 'NewExpression') {
+        c = findNext(syntax.callee).toLowerCase();
+        if (c == 'define') {
+            var arg = findNext(syntax.arguments[0])
+            for (a in arg) { output('require',arg[a]); }
+            rest = syntax.arguments.slice(1);
+        } else if (c == 'bus.on' || c == 'bus.emit' || c == 'require') {
+            var arg = findNext(syntax.arguments[0])
+            output(c.toLowerCase(),arg);
+            rest = syntax.arguments.slice(1);
+        } else {
+            rest = syntax.arguments;
+        }
+        rest.forEach(findNext);
     } else {
-        console.log('WHATSTHIS?',syntax);
+        output('WHATSTHIS?',syntax);
     }
     return rv;
     
@@ -137,7 +148,7 @@ function handleFile(fname) {
         timestamp = Date.now();
         syntax = esprima.parse(content, { tolerant: true });
         module.syntax = syntax;
-        findDependencies(syntax,0);
+        findDependencies(fname,syntax,0);
         //console.log(syntax);
         
     } catch (e) {
