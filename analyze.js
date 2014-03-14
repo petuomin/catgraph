@@ -226,9 +226,18 @@ function handleFile(fname) {
 }
 
 function skipInGraph(id) {
-    return  (id.indexOf('text!') === 0) ||
-            (id === 'underscore') ||
-            (id === 'core/L');
+    return  (id.indexOf('"text!') === 0) ||
+            (id === '"underscore"') ||
+            (id === '"core\\nL"');
+}
+
+function toNodeName(s) {
+    var myRe0 = /\//g;
+    var myRe1 = /[.\-]/g;
+    var myRe2 = /json\!/;
+
+    return '"' + s.replace(/\.js$/,'').replace(myRe0,'\\n').replace(myRe1,'_').replace(myRe2,'') + '"';
+
 }
 
 function createOutput(options) {
@@ -236,16 +245,14 @@ function createOutput(options) {
     var deps = options.format === 'deps';
     var events = options.format === 'events';
     var ev = {};
-    var myRe = /[.\-\/]/g;
-    var myRe2 = /json\!/;
 
     if (deps||events) { console.log('digraph prof {'); }
 
     for (var i in dependencies) {
         var dep = dependencies[i];
-        var subj = dep[0].replace(/\.js$/,'').replace(myRe,'_').replace(myRe2,''),
+        var subj = toNodeName(dep[0]),
             pred = dep[1]
-            obj = dep[2].replace(myRe,'_').replace(myRe2,'');
+            obj = toNodeName(dep[2]);
 
         if (deps) {
             if (pred === 'require' && !skipInGraph(obj)) {
