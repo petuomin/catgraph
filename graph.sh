@@ -1,7 +1,10 @@
-node analyze.js --format=deps core/*.js modules/*.js >deps.dot
-node analyze.js --format=deps core/*.js >deps-core.dot
-node analyze.js --format=deps modules/*.js >deps-modules.dot
-node analyze.js --format=events core/*.js modules/*.js json!modules/Toolbar_files/Toolbar_config.json >events.dot
+CORE="`find core/ -not -name Application.js -name \*.js`"
+MODULES="`find modules/ -name \*.js` json!modules/Toolbar_files/Toolbar_config.json"
+APP="core/Application.js"
+node analyze.js --format=deps ${CORE} ${MODULES} ${APP} >deps.dot
+node analyze.js --format=deps ${CORE} >deps-core.dot
+node analyze.js --format=deps ${MODULES} >deps-modules.dot
+node analyze.js --format=events ${CORE} ${MODULES} ${APP} >events.dot
 dot deps.dot -Tpng -o deps.png
 dot deps-core.dot -Tpng -o deps-core.png
 dot deps-modules.dot -Tpng -o deps-modules.png

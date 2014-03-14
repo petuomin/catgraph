@@ -125,7 +125,8 @@ function findDependencies(fname, syntax, depth, parent) {
         findNext(syntax.test);
         findNext(syntax.consequent);
         findNext(syntax.alternate);
-    } else if (syntax.type == 'WhileStatement') {
+    } else if (syntax.type == 'WhileStatement' ||
+               syntax.type == 'DoWhileStatement') {
         findNext(syntax.test);
         findNext(syntax.body);
     } else if (syntax.type == 'ForStatement') {
