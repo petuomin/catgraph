@@ -4,6 +4,7 @@
 
 var fs = require('fs'),
     esprima = require('esprima'),
+    core = {},
     dependencies = [];
 
 function showUsage() {
@@ -13,6 +14,7 @@ function showUsage() {
     console.log('Available options:');
     console.log();
     console.log('  --format=text|deps|events');
+    console.log('  --core=sink|source');
     console.log('  -v, --version  Print program version');
     console.log();
     process.exit(1);
@@ -25,6 +27,7 @@ function handleArgs() {
         format:'deps'
     };
     var fmt = '--format=';
+    var core = '--core=';
     
     if (process.argv.length <= 2) {
         showUsage();
@@ -38,6 +41,8 @@ function handleArgs() {
             console.log('Version 1');
         } else if (entry.indexOf(fmt) == 0) {
             options.format = entry.slice(fmt.length);
+        } else if (entry.indexOf(core) == 0) {
+            options.core = entry.slice(core.length);
         } else if (entry.slice(0, 2) === '--') {
             console.log('Error: unknown option ' + entry + '.');
             process.exit(1);
@@ -72,6 +77,39 @@ function repeat(s,n) {
     return r;
 }
 
+function toNodeName(s) {
+    var myRe0 = /\//g;
+    var myRe1 = /[.\-]/g;
+    var myRe2 = /json\!/;
+
+    return '"' + s.replace(/\.js$/,'').replace(myRe0,'\\n').replace(myRe1,'_').replace(myRe2,'') + '"';
+
+}
+
+function tryToInsertIntoCore(name) {
+   if (name.indexOf('"core') === 0) core[name] = true;
+};
+
+
+function skipInGraph(id) {
+    return  (id.indexOf('text!') === 0) ||
+            (id === 'underscore') ||
+            (id === 'jquery') ||
+            (id === 'mustache') ||
+            (id === 'backbone') ||
+            (id === 'core/L');
+}
+
+function addDependency(subj,pred,obj) {
+    if (skipInGraph(subj) || skipInGraph(obj)) return;
+    subj = toNodeName(subj);
+    obj = toNodeName(obj);
+    tryToInsertIntoCore(subj);
+    tryToInsertIntoCore(obj);
+    dependencies.push([subj,pred,obj]);
+}
+
+
 function findDependencies(fname, syntax, depth, parent) {
     
     var rv, a, c, rest;
@@ -83,7 +121,7 @@ function findDependencies(fname, syntax, depth, parent) {
         return findDependencies (fname, x, nextDepth, syntax);
     };
     function dependency (type,target) {
-        dependencies.push([fname,type,target]);
+        addDependency(fname,type,target);
     }
 
     if (!syntax) { return '<nothing>'; }
@@ -207,7 +245,7 @@ function handleFile(fname) {
         
         for (var i in obj.items) {
             var item = obj.items[i];
-            dependencies.push([fname,'bus.emit',item.event]);
+            addDependency(fname,'bus.emit',item.event);
         }
 
     } else {
@@ -226,41 +264,44 @@ function handleFile(fname) {
         
 }
 
-function skipInGraph(id) {
-    return  (id.indexOf('"text!') === 0) ||
-            (id === '"underscore"') ||
-            (id === '"core\\nL"');
-}
-
-function toNodeName(s) {
-    var myRe0 = /\//g;
-    var myRe1 = /[.\-]/g;
-    var myRe2 = /json\!/;
-
-    return '"' + s.replace(/\.js$/,'').replace(myRe0,'\\n').replace(myRe1,'_').replace(myRe2,'') + '"';
-
-}
-
 function createOutput(options) {
 
     var deps = options.format === 'deps';
     var events = options.format === 'events';
     var ev = {};
+    
+    if (deps||events) {
+        
+        console.log('digraph prof {');
 
-    if (deps||events) { console.log('digraph prof {'); }
+        for (var event in ev) {
+            console.log(event,'[shape=box];');
+        }
+        console.log('nodesep=0.2;ranksep=2;');
+
+        if (Object.keys(core).length>0) {
+            console.log('{ node [style=filled];')
+            if (options.core === 'sink') console.log('rank=sink;');
+            if (options.core === 'source') console.log('rank=source;');
+            for (var name in core) {
+                console.log(name + ';');
+            }
+            console.log('}');
+        }
+
+    }
 
     for (var i in dependencies) {
         var dep = dependencies[i];
-        var subj = toNodeName(dep[0]),
+        var subj = dep[0],
             pred = dep[1]
-            obj = toNodeName(dep[2]);
+            obj = dep[2];
 
         if (deps) {
-            if (pred === 'require' && !skipInGraph(obj)) {
+            if (pred === 'require') {
                 console.log(' ' + subj, '->', obj, ';');
             }
         } else if (events) {
-            if (skipInGraph(obj)) { continue; }
             if (pred === 'bus.on') {
                 console.log(' ' + obj, '->', subj, ';');
                 ev[obj] = true;
@@ -272,14 +313,13 @@ function createOutput(options) {
             console.log(subj,obj,pred);
         }
     }
-    for (var event in ev) {
-        console.log(event,'[shape=box];');
+
+    if (deps ||events) {
+        
+        console.log('}');
     }
 
-    if (deps ||events) { console.log('}'); }
-
 }
-
 function main () {
 
     var options = handleArgs();
