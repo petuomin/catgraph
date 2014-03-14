@@ -237,7 +237,7 @@ function createOutput(options) {
     var events = options.format === 'events';
     var ev = {};
     var myRe = /[.\-\/]/g;
-    var myRe2 = /.*\!/;
+    var myRe2 = /json\!/;
 
     if (deps||events) { console.log('digraph prof {'); }
 
