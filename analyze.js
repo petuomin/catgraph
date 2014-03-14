@@ -190,9 +190,26 @@ function findDependencies(fname, syntax, depth, parent) {
 }
 
 function handleFile(fname) {
-    var content, timestamp, syntax, name;
-    try {
-        content = fs.readFileSync(fname, 'utf-8');
+
+    var content, timestamp, syntax, name, obj, json = false;
+
+    if(fname.indexOf('json!') === 0) {
+        json = true;
+        fname = fname.slice(5);
+    }
+    
+    content = fs.readFileSync(fname, 'utf-8');
+
+    if(json) {
+
+        obj = JSON.parse(content);
+        
+        for (var i in obj.items) {
+            var item = obj.items[i];
+            dependencies.push([fname,'bus.emit',item.event]);
+        }
+
+    } else {
 
         if (content[0] === '#' && content[1] === '!') {
             content = '//' + content.substr(2, content.length);
@@ -204,15 +221,12 @@ function handleFile(fname) {
         findDependencies(fname,syntax,0);
         //console.log(syntax);
         
-    } catch (e) {
-        console.log('Error: ' + e.message);
-        throw e;
     }
+        
 }
 
 function skipInGraph(id) {
     return  (id.indexOf('text!') === 0) ||
-            (id.indexOf('json!') === 0) ||
             (id === 'underscore') ||
             (id === 'core/L');
 }
@@ -223,14 +237,15 @@ function createOutput(options) {
     var events = options.format === 'events';
     var ev = {};
     var myRe = /[.\-\/]/g;
+    var myRe2 = /.*\!/;
 
     if (deps||events) { console.log('digraph prof {'); }
 
     for (var i in dependencies) {
         var dep = dependencies[i];
-        var subj = dep[0].replace(/\.js$/,'').replace(myRe,'_'),
+        var subj = dep[0].replace(/\.js$/,'').replace(myRe,'_').replace(myRe2,''),
             pred = dep[1]
-            obj = dep[2].replace(myRe,'_');
+            obj = dep[2].replace(myRe,'_').replace(myRe2,'');
 
         if (deps) {
             if (pred === 'require' && !skipInGraph(obj)) {
